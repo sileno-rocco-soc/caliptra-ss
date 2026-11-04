@@ -1,0 +1,41 @@
+name: Nightly Runner
+
+on:
+  push:
+    branches: ['dev_local_runner']
+  workflow_dispatch:
+
+jobs:
+
+  dvsim-run:
+    name: DVSIM run
+    runs-on: [sileno-vm, caliptra-ss]
+
+    steps:
+      - name: Setup repository
+        uses: actions/checkout@v4
+
+      - name: Checkout Ankita's branch (PR 1298)
+        run: |
+          git fetch https://github.com/chipsalliance/caliptra-ss.git pull/1298/head:pr-1298
+          git checkout pr-1298
+          git submodule update --init --recursive
+
+      - name: Setup Nix environment
+        run: |
+          nix flake update --override-input caliptra-rtl-src "path:$PWD/third_party/caliptra-rtl"
+          nix develop .#caliptra-dvsim \
+            --override-input caliptra-rtl-src "path:$PWD/third_party/caliptra-rtl" \
+            --quiet \
+            --command true
+
+      - name: Run tests
+        run: |
+          nix develop .#caliptra-dvsim \
+            --override-input caliptra-rtl-src "path:$PWD/third_party/caliptra-rtl" \
+            --command bash -c '
+              export PATH=/usr/bin:/bin:$PATH
+              dvsim src/spi_host/dv/spi_host_sim_cfg.hjson -i all --cov
+            '
+
+
